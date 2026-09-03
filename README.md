@@ -2,7 +2,7 @@
 
 # gh-suggest
 
-`gh-suggest` is a precompiled GitHub CLI extension + skill for coding agents to submit PR review suggestions.
+`gh-suggest` is a precompiled GitHub CLI extension and bundled skill for coding agents to propose suggested changes on a Pull Request.
 
 ## Install
 
