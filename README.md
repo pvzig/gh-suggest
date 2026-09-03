@@ -1,3 +1,5 @@
+<p align="center"><img width="35%" height="35%" alt="gh-suggest" src="https://github.com/user-attachments/assets/4fa610b7-3fd2-44e6-8b6c-ec0ac284eca2" /></p>
+
 # gh-suggest
 
 `gh-suggest` is a precompiled GitHub CLI extension for creating PR suggestions. It supports
