@@ -229,8 +229,9 @@ The tag workflow must:
 8. Install and run the published extension on every supported platform.
 
 Prerelease classification ignores SemVer build metadata. Published releases are
-never replaced. A prerelease requires an earlier published precompiled release
-so GitHub CLI recognizes the repository as a binary extension.
+never replaced. An active repository ruleset prevents updates to or deletion of
+matching `v*` tags. A prerelease requires an earlier published precompiled
+release so GitHub CLI recognizes the repository as a binary extension.
 
 ### v0.1.0
 
