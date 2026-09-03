@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pinned toolchain
+        uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4.2.5
+        with:
+          version: 2026.8.12
+
+      - name: Run canonical validation gate
+        run: mise run check
+
+      - name: Verify validation did not modify the checkout
+        run: git diff --exit-code
+
+  gh-skill-compatibility:
+    name: GitHub CLI ${{ matrix.gh }} / ${{ matrix.agent }} / ${{ matrix.scope }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        gh:
+          - "2.90.0"
+          - "2.99.0"
+        agent:
+          - claude-code
+          - cursor
+          - codex
+        scope:
+          - project
+          - user
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install mise
+        uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4.2.5
+        with:
+          version: 2026.8.12
+          install: false
+
+      - name: Install local skill
+        run: |
+          mise exec "github-cli@${{ matrix.gh }}" -- \
+            gh skill install . gh-suggest \
+              --from-local \
+              --agent "${{ matrix.agent }}" \
+              --scope "${{ matrix.scope }}"
+
+      - name: Verify installed skill discovery path
+        run: |
+          if [[ "${{ matrix.scope }}" == "project" ]]; then
+            if [[ "${{ matrix.agent }}" == "claude-code" ]]; then
+              skill_root="$GITHUB_WORKSPACE/.claude/skills"
+            else
+              skill_root="$GITHUB_WORKSPACE/.agents/skills"
+            fi
+          else
+            case "${{ matrix.agent }}" in
+              claude-code) skill_root="$HOME/.claude/skills" ;;
+              cursor) skill_root="$HOME/.cursor/skills" ;;
+              codex) skill_root="$HOME/.codex/skills" ;;
+            esac
+          fi
+          skill_file="$skill_root/gh-suggest/SKILL.md"
+          test -f "$skill_file"
+          grep -q '^name: gh-suggest$' "$skill_file"

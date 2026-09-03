@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/pvzig/gh-suggest/main/schemas/review-file-v1.schema.json",
+  "title": "gh-suggest review file",
+  "description": "The version 1 input manifest for one ordered pull-request suggestion review.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "reviewBody",
+    "suggestions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "reviewBody": {
+      "type": "string",
+      "pattern": "\\S"
+    },
+    "suggestions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "$ref": "#/$defs/suggestion"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "suggestion": {
+      "type": "object",
+      "required": [
+        "path",
+        "endLine",
+        "replacementFile"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "startLine": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "replacementFile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$comment": "Runtime validation additionally enforces normalized repository paths, startLine less than endLine, non-overlapping ranges, content limits, replacement-file access, and GitHub diff commentability.",
+  "examples": [
+    {
+      "schemaVersion": 1,
+      "reviewBody": "Two focused concurrency fixes.",
+      "suggestions": [
+        {
+          "path": "Sources/Example.swift",
+          "endLine": 42,
+          "replacementFile": "replacements/cancellation.swift",
+          "note": "Preserve cancellation propagation."
+        },
+        {
+          "path": "Sources/Worker.swift",
+          "startLine": 64,
+          "endLine": 66,
+          "replacementFile": "replacements/timeout.swift",
+          "note": "Keep timeout handling structured."
+        }
+      ]
+    }
+  ]
+}

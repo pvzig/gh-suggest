@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/pvzig/gh-suggest/main/schemas/reconciliation-descriptor-v1.schema.json",
+  "title": "gh-suggest reconciliation descriptor",
+  "description": "The version 1 non-sensitive descriptor used to reconcile an ambiguous review write.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "host",
+    "repository",
+    "pullRequest",
+    "baseSHA",
+    "headSHA",
+    "event",
+    "reviewBodySHA256",
+    "suggestions",
+    "requestSHA256",
+    "attemptStartedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "host": {
+      "const": "github.com"
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^[^/]+/[^/]+$"
+    },
+    "pullRequest": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "baseSHA": {
+      "$ref": "#/$defs/commitSHA"
+    },
+    "headSHA": {
+      "$ref": "#/$defs/commitSHA"
+    },
+    "event": {
+      "const": "COMMENT"
+    },
+    "reviewBodySHA256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "suggestions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "$ref": "#/$defs/suggestion"
+      }
+    },
+    "requestSHA256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "attemptStartedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "commitSHA": {
+      "type": "string",
+      "pattern": "^[0-9A-Fa-f]{40}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9A-Fa-f]{64}$"
+    },
+    "suggestion": {
+      "type": "object",
+      "required": [
+        "path",
+        "endLine",
+        "side",
+        "bodySHA256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "startLine": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "side": {
+          "const": "RIGHT"
+        },
+        "bodySHA256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$comment": "Runtime validation additionally enforces GitHub owner and repository-name syntax, normalized suggestion paths, and startLine less than endLine.",
+  "examples": [
+    {
+      "schemaVersion": 1,
+      "host": "github.com",
+      "repository": "OWNER/REPOSITORY",
+      "pullRequest": 123,
+      "baseSHA": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "headSHA": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "event": "COMMENT",
+      "reviewBodySHA256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "suggestions": [
+        {
+          "path": "Sources/Example.swift",
+          "endLine": 42,
+          "side": "RIGHT",
+          "bodySHA256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        }
+      ],
+      "requestSHA256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "attemptStartedAt": "2026-08-08T12:00:00Z"
+    }
+  ]
+}

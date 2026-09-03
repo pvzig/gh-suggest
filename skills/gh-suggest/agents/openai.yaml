@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitHub Suggested Changes"
+  short_description: "Prepare and safely post grouped PR suggestions"
+  default_prompt: "Use $gh-suggest to choose a one-item or grouped pull-request review, dry-run review-only work, and validate and post directly only when authorized."

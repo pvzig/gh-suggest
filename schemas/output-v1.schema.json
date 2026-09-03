@@ -1,0 +1,468 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/pvzig/gh-suggest/main/schemas/output-v1.schema.json",
+  "title": "gh-suggest process output",
+  "description": "The version 1 JSON contract for create success, reconciliation success, and failure output.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/validated"
+    },
+    {
+      "$ref": "#/$defs/created"
+    },
+    {
+      "$ref": "#/$defs/reconciliationLikelyCreated"
+    },
+    {
+      "$ref": "#/$defs/reconciliationUnknown"
+    },
+    {
+      "$ref": "#/$defs/errorEnvelope"
+    }
+  ],
+  "$defs": {
+    "commitSHA": {
+      "type": "string",
+      "pattern": "^[0-9A-Fa-f]{40}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9A-Fa-f]{64}$"
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^[^/]+/[^/]+$"
+    },
+    "suggestion": {
+      "type": "object",
+      "required": [
+        "path",
+        "range",
+        "replacement",
+        "bodySHA256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "range": {
+          "type": "object",
+          "required": [
+            "startLine",
+            "endLine",
+            "side"
+          ],
+          "properties": {
+            "startLine": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "endLine": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "side": {
+              "const": "RIGHT"
+            }
+          },
+          "additionalProperties": true
+        },
+        "replacement": {
+          "type": "object",
+          "required": [
+            "byteCount",
+            "lineCount",
+            "sha256"
+          ],
+          "properties": {
+            "byteCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "lineCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          },
+          "additionalProperties": true
+        },
+        "bodySHA256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "additionalProperties": true
+    },
+    "createBase": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "status",
+        "host",
+        "repository",
+        "pullRequest",
+        "pullRequestURL",
+        "baseSHA",
+        "headSHA",
+        "reviewBodySHA256",
+        "suggestions",
+        "requestSHA256",
+        "posted"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "host": {
+          "const": "github.com"
+        },
+        "repository": {
+          "$ref": "#/$defs/repository"
+        },
+        "pullRequest": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "pullRequestURL": {
+          "type": "string",
+          "format": "uri"
+        },
+        "baseSHA": {
+          "$ref": "#/$defs/commitSHA"
+        },
+        "headSHA": {
+          "$ref": "#/$defs/commitSHA"
+        },
+        "reviewBodySHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "suggestions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/suggestion"
+          }
+        },
+        "requestSHA256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "additionalProperties": true
+    },
+    "validated": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/createBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "const": "validated"
+            },
+            "posted": {
+              "const": false
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "reviewID"
+                ]
+              },
+              {
+                "required": [
+                  "url"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "created": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/createBase"
+        },
+        {
+          "type": "object",
+          "required": [
+            "reviewID",
+            "url"
+          ],
+          "properties": {
+            "status": {
+              "const": "created"
+            },
+            "posted": {
+              "const": true
+            },
+            "reviewID": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "url": {
+              "type": "string",
+              "format": "uri"
+            }
+          }
+        }
+      ]
+    },
+    "reconciliationBase": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "status",
+        "host",
+        "repository",
+        "pullRequest",
+        "headSHA",
+        "requestSHA256",
+        "attemptStartedAt",
+        "suggestionCount",
+        "candidateCount",
+        "partialMatchCount",
+        "matchCount"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "host": {
+          "const": "github.com"
+        },
+        "repository": {
+          "$ref": "#/$defs/repository"
+        },
+        "pullRequest": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "headSHA": {
+          "$ref": "#/$defs/commitSHA"
+        },
+        "requestSHA256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "attemptStartedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "suggestionCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "candidateCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "partialMatchCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "matchCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": true
+    },
+    "reconciliationLikelyCreated": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/reconciliationBase"
+        },
+        {
+          "type": "object",
+          "required": [
+            "reviewID",
+            "url"
+          ],
+          "properties": {
+            "status": {
+              "const": "likely_created"
+            },
+            "matchCount": {
+              "const": 1
+            },
+            "reviewID": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "url": {
+              "type": "string",
+              "format": "uri"
+            }
+          }
+        }
+      ]
+    },
+    "reconciliationUnknown": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/reconciliationBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "const": "unknown"
+            },
+            "matchCount": {
+              "not": {
+                "const": 1
+              }
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "reviewID"
+                ]
+              },
+              {
+                "required": [
+                  "url"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "errorEnvelope": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "error"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "error": {
+          "type": "object",
+          "required": [
+            "code",
+            "message"
+          ],
+          "properties": {
+            "code": {
+              "enum": [
+                "invalid_arguments",
+                "authentication_failed",
+                "target_not_found",
+                "range_not_commentable",
+                "stale_pull_request",
+                "github_api_error",
+                "io_error",
+                "rate_limited",
+                "write_outcome_unknown",
+                "unsupported_host",
+                "cancelled",
+                "permission_denied"
+              ]
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1
+            },
+            "details": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "code": {
+                    "const": "write_outcome_unknown"
+                  }
+                },
+                "required": [
+                  "code"
+                ]
+              },
+              "then": {
+                "required": [
+                  "details"
+                ],
+                "properties": {
+                  "details": {
+                    "required": [
+                      "reconciliation",
+                      "guidance"
+                    ],
+                    "properties": {
+                      "reconciliation": {
+                        "$ref": "reconciliation-descriptor-v1.schema.json"
+                      },
+                      "guidance": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "$comment": "Additive output fields are permitted for forward compatibility while schemaVersion remains 1. Runtime validation additionally enforces cross-field count and line-range invariants.",
+  "examples": [
+    {
+      "schemaVersion": 1,
+      "status": "validated",
+      "host": "github.com",
+      "repository": "OWNER/REPOSITORY",
+      "pullRequest": 123,
+      "pullRequestURL": "https://github.com/OWNER/REPOSITORY/pull/123",
+      "baseSHA": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "headSHA": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "reviewBodySHA256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "suggestions": [
+        {
+          "path": "Sources/Example.swift",
+          "range": {
+            "startLine": 42,
+            "endLine": 42,
+            "side": "RIGHT"
+          },
+          "replacement": {
+            "byteCount": 18,
+            "lineCount": 1,
+            "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          },
+          "bodySHA256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      ],
+      "requestSHA256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "posted": false
+    },
+    {
+      "schemaVersion": 1,
+      "error": {
+        "code": "stale_pull_request",
+        "message": "The pull request head changed after validation.",
+        "details": {
+          "expectedHeadSHA": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "actualHeadSHA": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+[tools]
+go = "1.26.5"
+golangci-lint = "2.13.1"
+github-cli = "2.99.0"
+uv = "0.12.5"
+
+[tasks.format]
+description = "Format Go source"
+run = "go fmt ./..."
+
+[tasks.test]
+description = "Run all Go tests with the race detector"
+run = "go test -race ./..."
+
+[tasks.lint]
+description = "Verify golangci-lint configuration and run linters"
+run = """
+golangci-lint config verify
+golangci-lint run
+"""
+
+[tasks.validate-skill]
+description = "Validate the bundled Agent Skill with the pinned upstream revision"
+run = """
+uvx \
+  --from 'git+https://github.com/agentskills/agentskills.git@38a2ff82958afee88dadf4831509e6f7e9d8ef4e#subdirectory=skills-ref' \
+  skills-ref validate skills/gh-suggest
+"""
+
+[tasks.check]
+description = "Run the complete non-mutating validation gate"
+run = """
+test -z "$(gofmt -l .)"
+go mod tidy -diff
+mise run lint
+mise run test
+mise run validate-skill
+git diff --check
+git diff --cached --check
+"""

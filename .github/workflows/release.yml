@@ -1,0 +1,264 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pinned toolchain
+        uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4.2.5
+        with:
+          version: 2026.8.12
+
+      - name: Verify semantic-version tag
+        run: |
+          prerelease_identifier='(0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)'
+          build_identifier='[0-9A-Za-z-]+'
+          semver_pattern="^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-${prerelease_identifier}(\.${prerelease_identifier})*)?(\+${build_identifier}(\.${build_identifier})*)?$"
+          [[ "$GITHUB_REF_NAME" =~ $semver_pattern ]]
+
+      - name: Verify prerelease installation baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_version="${GITHUB_REF_NAME%%+*}"
+          if [[ "$release_version" != *-* ]]; then
+            exit 0
+          fi
+          if ! latest_assets="$(
+            gh api "repos/$GITHUB_REPOSITORY/releases/latest" \
+              --jq '.assets[].name' 2>/dev/null
+          )"; then
+            echo "::error::A prerelease tag requires a prior published precompiled release so GitHub CLI can identify the repository as a binary extension."
+            exit 1
+          fi
+          if ! grep -qx 'linux-amd64' <<<"$latest_assets"; then
+            echo "::error::A prerelease tag requires a prior published precompiled release so GitHub CLI can identify the repository as a binary extension."
+            exit 1
+          fi
+
+      - name: Validate source
+        run: mise run check
+
+      - name: Validate skill publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh skill publish --dry-run
+
+  release:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Prepare correctly classified draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_version="${GITHUB_REF_NAME%%+*}"
+          release_is_prerelease=false
+          if [[ "$release_version" == *-* ]]; then
+            release_is_prerelease=true
+          fi
+
+          set +e
+          release_response="$(
+            gh api --include \
+              "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" \
+              2>/dev/null
+          )"
+          release_lookup_exit_code=$?
+          set -e
+          http_status_code="$(
+            sed -n '1s/^[^ ]* \([0-9][0-9][0-9]\).*/\1/p' \
+              <<<"$release_response"
+          )"
+
+          if [[ "$release_lookup_exit_code" -ne 0 ]]; then
+            if [[ "$http_status_code" == "404" ]]; then
+              release_flags=(--draft)
+              if [[ "$release_is_prerelease" == "true" ]]; then
+                release_flags+=(--prerelease)
+              fi
+              gh release create "$GITHUB_REF_NAME" \
+                --repo "$GITHUB_REPOSITORY" \
+                --title "${GITHUB_REPOSITORY#*/} ${GITHUB_REF_NAME#v}" \
+                --generate-notes \
+                "${release_flags[@]}"
+              exit 0
+            fi
+            echo "::error::The existing release state could not be verified safely."
+            exit "$release_lookup_exit_code"
+          fi
+
+          release_is_draft="$(
+            gh api \
+              "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" \
+              --jq '.draft'
+          )"
+          if [[ "$release_is_draft" != "true" ]]; then
+            echo "::error::Refusing to replace assets on an existing published release."
+            exit 1
+          fi
+
+          gh release edit "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --prerelease="$release_is_prerelease"
+
+      - name: Build and publish precompiled extension
+        uses: cli/gh-extension-precompile@76961aa3bd1123d0a6fd42d0a41aca0696937c39 # v2.2.0
+        with:
+          draft_release: true
+          go_version_file: go.mod
+          go_build_options: ./cmd/gh-suggest
+          generate_attestations: true
+
+  draft-asset-smoke:
+    needs: release
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: linux-amd64
+          - runner: ubuntu-24.04-arm
+            target: linux-arm64
+          - runner: macos-15-intel
+            target: darwin-amd64
+          - runner: macos-latest
+            target: darwin-arm64
+          - runner: windows-latest
+            target: windows-amd64
+          - runner: windows-11-arm
+            target: windows-arm64
+    name: Draft asset smoke / ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Download and execute tagged draft asset
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          asset_name="${{ matrix.target }}"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            asset_name="$asset_name.exe"
+          fi
+          asset_directory="$RUNNER_TEMP/gh-suggest-draft-${{ matrix.target }}"
+          mkdir -p "$asset_directory"
+          gh release download "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "$asset_name" \
+            --dir "$asset_directory"
+
+      - name: Execute tagged draft asset without credentials
+        shell: bash
+        run: |
+          asset_name="${{ matrix.target }}"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            asset_name="$asset_name.exe"
+          fi
+          asset_directory="$RUNNER_TEMP/gh-suggest-draft-${{ matrix.target }}"
+          chmod +x "$asset_directory/$asset_name"
+          unset GH_TOKEN GITHUB_TOKEN
+          "$asset_directory/$asset_name" --help
+
+  skill-smoke:
+    needs: release
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        agent:
+          - claude-code
+          - cursor
+          - codex
+    name: Tagged skill smoke / ${{ matrix.agent }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pinned GitHub CLI
+        uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4.2.5
+        with:
+          version: 2026.8.12
+          install_args: github-cli
+
+      - name: Preview and install tagged skill
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh skill preview "$GITHUB_REPOSITORY" "gh-suggest@$GITHUB_REF_NAME"
+          gh skill install "$GITHUB_REPOSITORY" gh-suggest \
+            --pin "$GITHUB_REF_NAME" \
+            --agent "${{ matrix.agent }}" \
+            --scope project
+
+  publish:
+    needs:
+      - draft-asset-smoke
+      - skill-smoke
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish smoke-validated draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release edit "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft=false
+
+  extension-smoke:
+    needs: publish
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: linux-amd64
+          - runner: ubuntu-24.04-arm
+            target: linux-arm64
+          - runner: macos-15-intel
+            target: darwin-amd64
+          - runner: macos-latest
+            target: darwin-arm64
+          - runner: windows-latest
+            target: windows-amd64
+          - runner: windows-11-arm
+            target: windows-arm64
+    name: Extension install smoke / ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Install tagged extension
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh extension install "$GITHUB_REPOSITORY" --pin "$GITHUB_REF_NAME"
+
+      - name: Execute installed extension without credentials
+        shell: bash
+        run: |
+          unset GH_TOKEN GITHUB_TOKEN
+          gh suggest --help
