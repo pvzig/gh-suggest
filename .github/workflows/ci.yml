@@ -63,16 +63,15 @@ jobs:
 
       - name: Verify installed skill discovery path
         run: |
-          if mise exec "github-cli@${{ matrix.gh }}" -- \
-            gh skill list --help >/dev/null 2>&1; then
-            skill_root="$(
-              mise exec "github-cli@${{ matrix.gh }}" -- \
-                gh skill list \
-                  --agent "${{ matrix.agent }}" \
-                  --scope "${{ matrix.scope }}" \
-                  --json skillName,path \
-                  --jq '.[] | select(.skillName == "gh-suggest") | .path'
-            )"
+          if skill_root="$(
+            mise exec "github-cli@${{ matrix.gh }}" -- \
+              gh skill list \
+                --agent "${{ matrix.agent }}" \
+                --scope "${{ matrix.scope }}" \
+                --json skillName,path \
+                --jq '.[] | select(.skillName == "gh-suggest") | .path' \
+                2>/dev/null
+          )"; then
             test -n "$skill_root"
           else
             if [[ "${{ matrix.scope }}" == "project" ]]; then
