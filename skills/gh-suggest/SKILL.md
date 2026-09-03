@@ -1,6 +1,7 @@
 ---
 name: gh-suggest
 description: Use when a code review or direct request benefits from preparing, validating, or explicitly posting one GitHub pull-request review containing one or more exact inline suggested changes through the gh-suggest CLI extension. Choose a one-item manifest for one ready finding and group multiple ready findings that belong to the same pull-request snapshot and posting decision. Review-only tasks may dry-run a review, but only a current explicit instruction to leave, post, publish, or send that exact review authorizes its external write.
+license: MIT
 ---
 
 # Post grouped GitHub suggested changes

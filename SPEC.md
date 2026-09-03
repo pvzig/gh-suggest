@@ -1,6 +1,6 @@
 # `gh-suggest` Specification
 
-- Status: Implemented, pre-release
+- Status: Implemented for v0.1.0
 - Target: GitHub CLI extension with a bundled Agent Skill
 - Contract version: 1
 
@@ -232,14 +232,10 @@ Prerelease classification ignores SemVer build metadata. Published releases are
 never replaced. A prerelease requires an earlier published precompiled release
 so GitHub CLI recognizes the repository as a binary extension.
 
-### Remaining pre-release work
+### v0.1.0
 
-- Run an authorized live smoke test in a dedicated repository.
-- Confirm one grouped review contains ordered, applicable single-line and
-  multi-line suggestions.
-- Confirm empty deletion and variable-length backtick replacements apply exactly.
-- Confirm the returned URL and ID identify the grouped review.
-- Run the tagged asset and skill installation matrix through the release workflow.
-
-Live mutation tests must not target unrelated repositories or pull requests. The
-project remains pre-release until this work succeeds.
+The first release uses the tagged workflow to validate the source and skill,
+build and attest standard precompiled GitHub CLI extension assets, execute the
+draft binaries, install the tagged skill, publish the release, and smoke-test the
+published extension. Live mutation tests remain restricted to dedicated test
+repositories and pull requests.

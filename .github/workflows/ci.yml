@@ -63,19 +63,32 @@ jobs:
 
       - name: Verify installed skill discovery path
         run: |
-          if [[ "${{ matrix.scope }}" == "project" ]]; then
-            if [[ "${{ matrix.agent }}" == "claude-code" ]]; then
-              skill_root="$GITHUB_WORKSPACE/.claude/skills"
-            else
-              skill_root="$GITHUB_WORKSPACE/.agents/skills"
-            fi
+          if mise exec "github-cli@${{ matrix.gh }}" -- \
+            gh skill list --help >/dev/null 2>&1; then
+            skill_root="$(
+              mise exec "github-cli@${{ matrix.gh }}" -- \
+                gh skill list \
+                  --agent "${{ matrix.agent }}" \
+                  --scope "${{ matrix.scope }}" \
+                  --json skillName,path \
+                  --jq '.[] | select(.skillName == "gh-suggest") | .path'
+            )"
+            test -n "$skill_root"
           else
-            case "${{ matrix.agent }}" in
-              claude-code) skill_root="$HOME/.claude/skills" ;;
-              cursor) skill_root="$HOME/.cursor/skills" ;;
-              codex) skill_root="$HOME/.codex/skills" ;;
-            esac
+            if [[ "${{ matrix.scope }}" == "project" ]]; then
+              if [[ "${{ matrix.agent }}" == "claude-code" ]]; then
+                skill_root="$GITHUB_WORKSPACE/.claude/skills/gh-suggest"
+              else
+                skill_root="$GITHUB_WORKSPACE/.agents/skills/gh-suggest"
+              fi
+            else
+              case "${{ matrix.agent }}" in
+                claude-code) skill_root="$HOME/.claude/skills/gh-suggest" ;;
+                cursor) skill_root="$HOME/.cursor/skills/gh-suggest" ;;
+                codex) skill_root="$HOME/.codex/skills/gh-suggest" ;;
+              esac
+            fi
           fi
-          skill_file="$skill_root/gh-suggest/SKILL.md"
+          skill_file="$skill_root/SKILL.md"
           test -f "$skill_file"
           grep -q '^name: gh-suggest$' "$skill_file"
