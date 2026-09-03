@@ -2,9 +2,7 @@
 
 # gh-suggest
 
-`gh-suggest` is a precompiled GitHub CLI extension that lets humans and coding
-agents validate and submit one pull-request review containing one or more exact
-inline suggestions. A review may mix single-line and multi-line replacements.
+`gh-suggest` is a precompiled GitHub CLI extension + skill for coding agents to submit PR review suggestions.
 
 ## Install
 
@@ -72,10 +70,6 @@ POST. Its output includes `status: "validated"`, `posted: false`, the resolved
 base and head SHAs, suggestion digests, and `requestSHA256`.
 
 ### Post the review
-
-Posting is one external write that can notify people. After explicitly deciding
-to post the exact validated review, rerun without `--dry-run`. Use the head SHA
-from the dry run to reject a changed pull-request snapshot:
 
 ```sh
 gh suggest create 123 \
