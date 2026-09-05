@@ -297,6 +297,56 @@ func TestCreateReviewBoundsSuccessfulResponseBeforeDecoding(t *testing.T) {
 	}
 }
 
+func TestCreateReviewBoundsErrorResponseWithoutLosingHTTPStatus(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name     string
+		status   int
+		wantCode domain.Code
+	}{
+		{name: "ambiguous server error", status: http.StatusServiceUnavailable, wantCode: domain.CodeWriteOutcomeUnknown},
+		{name: "definitive validation error", status: http.StatusUnprocessableEntity, wantCode: domain.CodeGitHubAPIError},
+		{name: "rate limit headers", status: http.StatusTooManyRequests, wantCode: domain.CodeRateLimited},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			body := &observedReadCloser{
+				reader: strings.NewReader(`{"message":"` + strings.Repeat("x", maxErrorResponseBytes*3) + `"}`),
+			}
+			requestCount := 0
+			adapter := newHTTPAdapter(t, roundTripFunc(func(request *http.Request) (*http.Response, error) {
+				requestCount++
+				_ = snapshotRequest(t, request)
+				result := response(request, test.status, "application/json", body)
+				result.Header.Set("Retry-After", "120")
+				return result, nil
+			}))
+			_, err := adapter.CreateReview(context.Background(), validReviewRequest())
+			failure := assertFailure(t, err, test.wantCode)
+			if test.wantCode == domain.CodeWriteOutcomeUnknown {
+				if failure.Details["reconciliation"] == nil {
+					t.Fatal("ambiguous write lost its reconciliation descriptor")
+				}
+			} else if failure.Details["status"] != test.status {
+				t.Fatalf("status = %v, want %d", failure.Details["status"], test.status)
+			}
+			if test.wantCode == domain.CodeRateLimited && failure.Details["retryAfter"] != 120 {
+				t.Fatalf("rate-limit details = %#v", failure.Details)
+			}
+			// go-gh's streaming sanitizer has separate 4 KiB input and output
+			// buffers that may both hold unread bytes from this ASCII fixture.
+			if body.bytesRead < maxErrorResponseBytes+1 || body.bytesRead > maxErrorResponseBytes+8192 || !body.closed {
+				t.Fatalf("read %d response bytes, closed = %t", body.bytesRead, body.closed)
+			}
+			if requestCount != 1 {
+				t.Fatalf("request count = %d, want 1", requestCount)
+			}
+		})
+	}
+}
+
 func TestCreateReviewCancellationBeforeAttemptIsDefinitive(t *testing.T) {
 	t.Parallel()
 

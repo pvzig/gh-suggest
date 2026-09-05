@@ -25,6 +25,10 @@ const (
 	apiBaseURL = "https://api.github.com/"
 	timeout    = 30 * time.Second
 
+	// Allow full list pages containing large UTF-8 review bodies while bounding
+	// each decoded JSON response independently of the pagination limit.
+	maxJSONResponseBytes = 32 << 20
+
 	// listPageSize is the largest page GitHub serves for the list endpoints
 	// this adapter reads.
 	listPageSize = 100
@@ -142,9 +146,12 @@ func (client *httpRESTClient) DoWithContext(
 		httpResponse.StatusCode == http.StatusResetContent {
 		return nil
 	}
-	encoded, err := io.ReadAll(httpResponse.Body)
+	encoded, err := io.ReadAll(io.LimitReader(httpResponse.Body, maxJSONResponseBytes+1))
 	if err != nil {
 		return err
+	}
+	if len(encoded) > maxJSONResponseBytes {
+		return fmt.Errorf("GitHub JSON response exceeds the %d-byte limit", maxJSONResponseBytes)
 	}
 	return json.Unmarshal(encoded, response)
 }
@@ -175,7 +182,7 @@ func (client *httpRESTClient) RequestWithContext(
 	defer func() {
 		_ = httpResponse.Body.Close()
 	}()
-	return nil, api.HandleHTTPError(httpResponse)
+	return nil, boundedHTTPError(httpResponse)
 }
 
 func newAdapter(jsonClient restClient, diffClient restClient) *Adapter {

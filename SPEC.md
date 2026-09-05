@@ -78,7 +78,9 @@ Normalization and limits:
 - Invalid UTF-8, NUL, response-unstable controls, and literal Unicode control
   escapes that go-gh rewrites on read-back are rejected.
 - Notes cannot leave a fenced-code or explicitly terminated raw-HTML block open
-  across the generated suggestion fence.
+  across the generated suggestion fence. Scanning recognizes both LF and lone CR
+  line endings and permits only spaces or tabs after a closing code fence;
+  scanner-only line-ending handling does not change submitted note bytes.
 
 `--dry-run` performs every read and validation but omits the POST. `--head-sha`
 requires both metadata observations to match the supplied full commit SHA.
@@ -146,6 +148,7 @@ cross-hunk targets fail closed with stable reasons.
   `write_outcome_unknown` and are never retried automatically.
 - If GitHub creation is definitive but local success output fails, return
   `io_error` with `posted: true`, review identity, and no-retry guidance.
+  Broken stdout pipes follow this path on Unix instead of terminating on SIGPIPE.
 
 ### Reconciliation
 
@@ -170,6 +173,10 @@ automatic retry.
 - GET and HEAD redirects are allowed; mutating-request redirects are rejected
   before replay.
 - List endpoints share a bound of 100 pages with 100 results per page.
+- Each JSON metadata or list response is limited to 32 MiB. HTTP error bodies
+  are limited to 1 MiB before decoding; oversized diagnostics retain the known
+  status and headers, so POST 5xx responses remain ambiguous. These limits apply
+  after go-gh's streaming sanitization and allow one overflow sentinel byte.
 
 ## Implementation
 
@@ -202,7 +209,8 @@ Tests cover strict input; normalization and limits; selector resolution; complet
 diff parsing; grouped request ordering and stale-state rejection; transport
 headers, pagination, bounds, replay prevention, redirects, and ambiguous errors;
 dry-run/no-write behavior; whole-review reconciliation; output and schema
-contracts; and local I/O failures.
+contracts; and local I/O failures, including a subprocess with a closed stdout
+pipe after a successful review POST to a local fixture server.
 
 The canonical non-mutating gate is:
 

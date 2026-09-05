@@ -310,6 +310,8 @@ func TestNormalizeNoteAcceptsBalancedFences(t *testing.T) {
 		{name: "closed backtick fence", input: "Before:\n```\nlet value = 1\n```"},
 		{name: "closed tilde fence", input: "Before:\n~~~\nlet value = 1\n~~~"},
 		{name: "info string on the opening fence", input: "```swift\nlet value = 1\n```"},
+		{name: "CR-delimited fence", input: "```swift\rlet value = 1\r```"},
+		{name: "closing fence with spaces and tabs", input: "```\ncode\n``` \t"},
 		{name: "longer closing fence", input: "```\nlet value = 1\n`````"},
 		{name: "backticks inside an opening fence info string", input: "``` `a` ```"},
 		{name: "inline code span", input: "Keep `Task` cancellation."},
@@ -318,6 +320,7 @@ func TestNormalizeNoteAcceptsBalancedFences(t *testing.T) {
 		{name: "fewer than three backticks", input: "``\nnot a fence\n``"},
 		{name: "closed pre block", input: "<pre>\nraw\n</PRE>"},
 		{name: "closed comment", input: "<!--\ncomment\n-->"},
+		{name: "CR-delimited comment", input: "<!--\rcomment\r-->"},
 		{name: "closed processing instruction", input: "<?instruction?>"},
 		{name: "closed declaration", input: "<!DOCTYPE html>"},
 		{name: "closed CDATA", input: "<![CDATA[raw]]>"},
@@ -331,8 +334,12 @@ func TestNormalizeNoteAcceptsBalancedFences(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			if _, err := NormalizeNote(test.input); err != nil {
+			note, err := NormalizeNote(test.input)
+			if err != nil {
 				t.Fatalf("NormalizeNote() error = %v", err)
+			}
+			if note.Content() != test.input {
+				t.Fatalf("Markdown scanning changed note bytes: %q", note.Content())
 			}
 		})
 	}
@@ -377,6 +384,21 @@ func TestNormalizeNoteRejectsInvalidInput(t *testing.T) {
 			wantErr: ErrUnclosedCodeFence,
 		},
 		{
+			name:    "unclosed CR-delimited fence",
+			input:   "Explanation\r```go",
+			wantErr: ErrUnclosedCodeFence,
+		},
+		{
+			name:    "nonbreaking space cannot close a fence",
+			input:   "```go\ncode\n```\u00a0",
+			wantErr: ErrUnclosedCodeFence,
+		},
+		{
+			name:    "vertical tab cannot close a fence",
+			input:   "```go\ncode\n```\v",
+			wantErr: ErrUnclosedCodeFence,
+		},
+		{
 			name:    "closing fence is shorter than its opening",
 			input:   "Broken:\n````\nlet value = 1\n```",
 			wantErr: ErrUnclosedCodeFence,
@@ -404,6 +426,11 @@ func TestNormalizeNoteRejectsInvalidInput(t *testing.T) {
 		{
 			name:    "unclosed comment",
 			input:   "<!--\ncomment",
+			wantErr: ErrUnclosedHTMLBlock,
+		},
+		{
+			name:    "unclosed CR-delimited comment",
+			input:   "Explanation\r<!--",
 			wantErr: ErrUnclosedHTMLBlock,
 		},
 		{

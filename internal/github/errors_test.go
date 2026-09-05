@@ -3,13 +3,51 @@ package github
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/cli/go-gh/v2/pkg/api"
 
 	"github.com/pvzig/gh-suggest/internal/domain"
 )
+
+func TestBoundedHTTPErrorAcceptsExactLimitAndPreservesDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	const diagnostic = `{"message":"Validation Failed","errors":["body is invalid"]}`
+	request, err := http.NewRequest(http.MethodPost, apiBaseURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := textResponse(request, http.StatusUnprocessableEntity, "application/json",
+		diagnostic+strings.Repeat(" ", maxErrorResponseBytes-len(diagnostic)))
+	defer func() { _ = response.Body.Close() }()
+	err = boundedHTTPError(response)
+	httpError, ok := errors.AsType[*api.HTTPError](err)
+	if !ok || httpError.StatusCode != http.StatusUnprocessableEntity ||
+		httpError.Message != "Validation Failed\nbody is invalid" {
+		t.Fatalf("HTTP error = %#v", err)
+	}
+}
+
+func TestBoundedHTTPErrorPreservesStatusAfterBodyReadFailure(t *testing.T) {
+	t.Parallel()
+
+	request, err := http.NewRequest(http.MethodPost, apiBaseURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := response(request, http.StatusServiceUnavailable, "application/json",
+		io.NopCloser(failingReader{err: io.ErrUnexpectedEOF}))
+	defer func() { _ = result.Body.Close() }()
+	err = boundedHTTPError(result)
+	httpError, ok := errors.AsType[*api.HTTPError](err)
+	if !ok || httpError.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("HTTP error = %#v", err)
+	}
+}
 
 func TestClassifyHTTPErrorUsesStablePrecedence(t *testing.T) {
 	t.Parallel()

@@ -302,7 +302,9 @@ func unclosedMarkdownBlock(content string) markdownBlock {
 		htmlFoldCase    bool
 	)
 
-	for line := range strings.SplitSeq(content, "\n") {
+	// GFM treats a lone CR as a line ending too. Only the scanner's view is
+	// changed; the normalized note bytes remain the ones sent and hashed.
+	for line := range strings.SplitSeq(strings.ReplaceAll(content, "\r", "\n"), "\n") {
 		if block == markdownRawHTML {
 			if containsHTMLBlockEnd(line, htmlEnd, htmlFoldCase) {
 				block = markdownBlockNone
@@ -314,7 +316,7 @@ func unclosedMarkdownBlock(content string) markdownBlock {
 		if block == markdownCodeFence {
 			if lineMarker == codeFenceMarker &&
 				lineWidth >= codeFenceWidth &&
-				strings.TrimSpace(info) == "" {
+				strings.Trim(info, " \t") == "" {
 				block = markdownBlockNone
 			}
 			continue

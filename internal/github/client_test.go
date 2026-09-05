@@ -270,3 +270,39 @@ func TestNewRejectsUnsupportedHost(t *testing.T) {
 		t.Fatalf("failure host = %#v, want enterprise.example", got)
 	}
 }
+
+func TestListReviewsBoundsJSONResponseAndClosesBody(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name string
+		size int
+	}{
+		{name: "at limit", size: maxJSONResponseBytes},
+		{name: "over limit", size: maxJSONResponseBytes + 64},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			body := &observedReadCloser{
+				reader: strings.NewReader("[]" + strings.Repeat(" ", test.size-2)),
+			}
+			requestCount := 0
+			adapter := newHTTPAdapter(t, roundTripFunc(func(request *http.Request) (*http.Response, error) {
+				requestCount++
+				// Avoid sanitizer read-ahead when asserting the exact byte bound.
+				return response(request, http.StatusOK, "application/octet-stream", body), nil
+			}))
+			_, err := adapter.ListReviews(context.Background(), testPullRequestRef(), time.Time{})
+			if test.size > maxJSONResponseBytes {
+				_ = assertFailure(t, err, domain.CodeGitHubAPIError)
+			} else if err != nil {
+				t.Fatalf("ListReviews() error = %v", err)
+			}
+			if body.bytesRead != min(test.size, maxJSONResponseBytes+1) || !body.closed {
+				t.Fatalf("read %d response bytes, closed = %t", body.bytesRead, body.closed)
+			}
+			if requestCount != 1 {
+				t.Fatalf("request count = %d, want 1", requestCount)
+			}
+		})
+	}
+}

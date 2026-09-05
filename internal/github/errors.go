@@ -3,6 +3,8 @@ package github
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,6 +13,27 @@ import (
 
 	"github.com/pvzig/gh-suggest/internal/domain"
 )
+
+const maxErrorResponseBytes = 1 << 20
+
+// boundedHTTPError retains the received status and headers even when error
+// diagnostics overflow. In particular, a POST's 5xx must remain ambiguous.
+// The caller still owns and closes the original response body.
+func boundedHTTPError(response *http.Response) error {
+	limited := &io.LimitedReader{R: response.Body, N: maxErrorResponseBytes + 1}
+	bounded := *response
+	bounded.Body = io.NopCloser(limited)
+	err := api.HandleHTTPError(&bounded)
+	if limited.N == 0 {
+		return &api.HTTPError{
+			StatusCode: response.StatusCode,
+			Headers:    response.Header,
+			RequestURL: response.Request.URL,
+			Message:    fmt.Sprintf("GitHub error response exceeds the %d-byte limit", maxErrorResponseBytes),
+		}
+	}
+	return err
+}
 
 func authenticationFailure(message string, cause error) *domain.Failure {
 	return domain.NewFailure(domain.CodeAuthenticationFailed, message, nil, cause)

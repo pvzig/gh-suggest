@@ -15,6 +15,11 @@ func main() {
 }
 
 func run() int {
+	// Let broken stdout pipes return EPIPE so a completed POST still reports
+	// its review identity and no-retry guidance on stderr.
+	signal.Ignore(syscall.SIGPIPE)
+	defer signal.Reset(syscall.SIGPIPE)
+
 	ctx, stop := signal.NotifyContext(
 		context.Background(),
 		os.Interrupt,
