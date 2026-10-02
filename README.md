@@ -9,13 +9,23 @@
 Install the extension and bundled Agent Skill from the same release:
 
 ```sh
-gh extension install pvzig/gh-suggest --pin v0.1.0
+./scripts/install-extension.sh
 
 gh skill preview pvzig/gh-suggest gh-suggest@v0.1.0
 gh skill install pvzig/gh-suggest gh-suggest \
   --pin v0.1.0 \
   --agent codex \
+  --agent codex \
   --scope user
+```
+
+On Cursor Cloud Agents and other hosts that export `GITHUB_TOKEN`, do not run
+`gh extension install` with that variable set unless the token can read public
+GitHub releases. The bundled script unsets `GITHUB_TOKEN` and `GH_TOKEN` for the
+install. To install manually:
+
+```sh
+env -u GITHUB_TOKEN -u GH_TOKEN gh extension install pvzig/gh-suggest --pin v0.1.0
 ```
 
 Replace `codex` with `claude-code` or `cursor` when appropriate. Use
